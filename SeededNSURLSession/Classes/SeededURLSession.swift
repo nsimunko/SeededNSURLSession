@@ -10,59 +10,59 @@ let StatusCode = "status_code"
 let HTTPMethod = "http_method"
 let InlineResponse = "inline_response"
 
-@objc public class SeededURLSession: NSURLSession {
+@objc open class SeededURLSession: URLSession {
     let jsonBundle: String!
 
     public init(jsonBundle named: String) {
         self.jsonBundle = named
     }
 
-    public class func defaultSession(queue: NSOperationQueue = NSOperationQueue.mainQueue()) -> NSURLSession {
+    open class func defaultSession(_ queue: OperationQueue = OperationQueue.main) -> URLSession {
         if UIStubber.isRunningAutomationTests() {
             return UIStubber.stubAPICallsSession()
         }
-        let session = NSURLSession(
-            configuration: NSURLSessionConfiguration.defaultSessionConfiguration(),
+        let session = URLSession(
+            configuration: URLSessionConfiguration.default,
             delegate: nil,
             delegateQueue: queue)
 
         return session
     }
 
-    override public func dataTaskWithRequest(request: NSURLRequest, completionHandler: (NSData?, NSURLResponse?, NSError?) -> Void) -> NSURLSessionDataTask {
-        guard let url = request.URL else { return errorTask(request.URL, reason: "No URL specified", completionHandler: completionHandler) }
+    override open func dataTask(with request: URLRequest, completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void) -> URLSessionDataTask {
+        guard let url = request.url else { return errorTask(request.url, reason: "No URL specified", completionHandler: completionHandler) }
         guard let bundle = retrieveBundle(bundleName: jsonBundle) else { return errorTask(url, reason: "No such bundle '\(jsonBundle)' found.", completionHandler: completionHandler) }
 
         let mappings = retrieveMappingsForBundle(bundle: bundle)
 
         let mapping = mappings?.filter({ (mapping) -> Bool in
-            let httpMethodMatch = request.HTTPMethod == mapping[HTTPMethod] as! String
-            let urlMatch = findMatch(path: mapping[MatchingURL], url: url.absoluteString)
+            let httpMethodMatch = request.httpMethod == mapping[HTTPMethod] as? String
+            let urlMatch = findMatch(path: mapping.object(forKey: MatchingURL) as AnyObject?, url: url.absoluteString)
             return urlMatch && httpMethodMatch
         }).first
 
         if let mapping = mapping,
-            jsonFileName = mapping[JSONFile] as? String,
-            statusString = mapping[StatusCode] as? String,
-            statusCode = Int(statusString) {
+            let jsonFileName = mapping[JSONFile] as? String,
+            let statusString = mapping[StatusCode] as? String,
+            let statusCode = Int(statusString) {
 
-            var data: NSData?
-            if let path = bundle.pathForResource(jsonFileName, ofType: "json") {
-                data = NSData(contentsOfFile: path)
+            var data: Data?
+            if let path = bundle.path(forResource: jsonFileName, ofType: "json") {
+                data = try? Data(contentsOf: URL(fileURLWithPath: path))
             } else {
                 if let response = mapping[InlineResponse] as? String {
-                    data = response.dataUsingEncoding(NSUTF8StringEncoding)
+                    data = response.data(using: String.Encoding.utf8)
                 }
             }
 
             let task = SeededDataTask(url: url, completion: completionHandler)
 
             if statusCode == 422 || statusCode == 500 {
-                let error = NSError(domain: NSURLErrorDomain, code: Int(CFNetworkErrors.CFURLErrorCannotLoadFromNetwork.rawValue), userInfo: nil)
+                let error = NSError(domain: NSURLErrorDomain, code: Int(CFNetworkErrors.cfurlErrorCannotLoadFromNetwork.rawValue), userInfo: nil)
                 task.nextError = error
             }
 
-            let response = NSHTTPURLResponse(URL: url, statusCode: statusCode, HTTPVersion: nil, headerFields: nil)
+            let response = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)
 
             task.data = data
             task.nextResponse = response
@@ -72,26 +72,26 @@ let InlineResponse = "inline_response"
         }
     }
 
-    public func findMatch(path path: AnyObject?, url: String) -> Bool {
+    open func findMatch(path: AnyObject?, url: String) -> Bool {
         guard let regexPattern = path as? String else { return false }
 
-        let modifiedPattern = regexPattern.stringByAppendingString("$")
+        let modifiedPattern = regexPattern + "$"
 
-        if let _ = url.rangeOfString(modifiedPattern, options: .RegularExpressionSearch) {
+        if let _ = url.range(of: modifiedPattern, options: .regularExpression) {
             return true
         }
 
         return false
     }
 
-    func retrieveBundle(bundleName bundleName: String) -> NSBundle? {
-        guard let bundlePath = NSBundle.mainBundle().pathForResource(bundleName, ofType: "bundle") else { return nil }
-        let bundle = NSBundle(path: bundlePath)
+    func retrieveBundle(bundleName: String) -> Bundle? {
+        guard let bundlePath = Bundle.main.path(forResource: bundleName, ofType: "bundle") else { return nil }
+        let bundle = Bundle(path: bundlePath)
         return bundle
     }
 
-    func retrieveMappingsForBundle(bundle bundle: NSBundle) -> [NSDictionary]? {
-        guard let mappingFilePath = bundle.pathForResource(MappingFilename, ofType: "plist") else { return nil }
+    func retrieveMappingsForBundle(bundle: Bundle) -> [NSDictionary]? {
+        guard let mappingFilePath = bundle.path(forResource: MappingFilename, ofType: "plist") else { return nil }
         guard let mappings = NSArray(contentsOfFile: mappingFilePath) as? [NSDictionary] else { return nil }
         return mappings
     }
@@ -99,8 +99,8 @@ let InlineResponse = "inline_response"
 
 // MARK - Error cases
 extension SeededURLSession {
-    func errorTask(url: NSURL?, reason: String, completionHandler: DataCompletion) -> SeededDataTask {
-        var assignedUrl: NSURL! = url == nil ? NSURL(string: "http://www.example.com/") : url
+    func errorTask(_ url: URL?, reason: String, completionHandler: @escaping DataCompletion) -> SeededDataTask {
+        let assignedUrl: URL! = url == nil ? URL(string: "http://www.example.com/") : url
 
         let task = SeededDataTask(url: assignedUrl, completion: completionHandler)
         task.nextError = NSError(reason: reason)

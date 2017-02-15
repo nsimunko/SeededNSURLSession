@@ -3,22 +3,22 @@
 //
 //  Created by Michael Hayman on 2016-05-18.
 
-public typealias DataCompletion = (NSData?, NSURLResponse?, NSError?) -> Void
+public typealias DataCompletion = (Data?, URLResponse?, NSError?) -> Void
 
-@objc public class SeededDataTask: NSURLSessionDataTask {
-    private let url: NSURL
-    private let completion: DataCompletion
-    var data: NSData?
+@objc open class SeededDataTask: URLSessionDataTask {
+    fileprivate let url: URL
+    fileprivate let completion: DataCompletion
+    var data: Data?
     var nextError: NSError?
-    var nextResponse: NSHTTPURLResponse?
+    var nextResponse: HTTPURLResponse?
 
-    init(url: NSURL, completion: DataCompletion) {
+    init(url: URL, completion: @escaping DataCompletion) {
         self.url = url
         self.completion = completion
         self.data = nil
     }
 
-    override public func resume() {
+    override open func resume() {
         completion(data, nextResponse, nextError)
     }
 }

@@ -3,14 +3,14 @@
 //
 //  Created by Michael Hayman on 2016-05-18.
 
-@objc public class SampleData: NSObject {
-    public class func retrieveDataFromBundleWithName(bundle bundleName: String, resource: String) -> NSData? {
-        let bundle = NSBundle.mainBundle()
+@objc open class SampleData: NSObject {
+    open class func retrieveDataFromBundleWithName(bundle bundleName: String, resource: String) -> Data? {
+        let bundle = Bundle.main
 
-        guard let bundlePath = bundle.pathForResource(bundleName, ofType: "bundle") else { return nil }
-        guard let jsonBundle = NSBundle(path: bundlePath) else { return nil }
-        guard let path = jsonBundle.pathForResource(resource, ofType: "json") else { return nil }
+        guard let bundlePath = bundle.path(forResource: bundleName, ofType: "bundle") else { return nil }
+        guard let jsonBundle = Bundle(path: bundlePath) else { return nil }
+        guard let path = jsonBundle.path(forResource: resource, ofType: "json") else { return nil }
 
-        return NSData(contentsOfFile: path)
+        return (try? Data(contentsOf: URL(fileURLWithPath: path)))
     }
 }
